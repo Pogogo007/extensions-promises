@@ -34,6 +34,18 @@ class Source {
     globalRequestHeaders() { return {}; }
     globalRequestCookies() { return []; }
     /**
+     * A stateful source may require user input.
+     * By supplying this value to the Source, the app will render your form to the user
+     * in the application settings.
+     */
+    getAppStatefulForm() { return createUserForm({ formElements: [] }); }
+    /**
+     * When the Advanced Search is rendered to the user, this skeleton defines what
+     * fields which will show up to the user, and returned back to the source
+     * when the request is made.
+     */
+    getAdvancedSearchForm() { return createUserForm({ formElements: [] }); }
+    /**
      * (OPTIONAL METHOD) Given a manga ID, return a URL which Safari can open in a browser to display.
      * @param mangaId
      */
@@ -118,6 +130,18 @@ class Source {
         }
         return time;
     }
+    /**
+     * When a function requires a POST body, it always should be defined as a JsonObject
+     * and then passed through this function to ensure that it's encoded properly.
+     * @param obj
+     */
+    urlEncodeObject(obj) {
+        let ret = {};
+        for (const entry of Object.entries(obj)) {
+            ret[encodeURIComponent(entry[0])] = encodeURIComponent(entry[1]);
+        }
+        return ret;
+    }
 }
 exports.Source = Source;
 
@@ -153,7 +177,7 @@ __exportStar(require("./base"), exports);
 __exportStar(require("./models"), exports);
 __exportStar(require("./APIWrapper"), exports);
 
-},{"./APIWrapper":1,"./base":3,"./models":22}],5:[function(require,module,exports){
+},{"./APIWrapper":1,"./base":3,"./models":25}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 
@@ -240,6 +264,8 @@ arguments[4][5][0].apply(exports,arguments)
 },{"dup":5}],19:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
 },{"dup":5}],20:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TagType = void 0;
@@ -257,9 +283,13 @@ var TagType;
     TagType["RED"] = "danger";
 })(TagType = exports.TagType || (exports.TagType = {}));
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
-},{"dup":5}],22:[function(require,module,exports){
+},{"dup":5}],23:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],24:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],25:[function(require,module,exports){
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -289,8 +319,11 @@ __exportStar(require("./ResponseObject"), exports);
 __exportStar(require("./RequestManager"), exports);
 __exportStar(require("./RequestHeaders"), exports);
 __exportStar(require("./SourceInfo"), exports);
+__exportStar(require("./TrackObject"), exports);
+__exportStar(require("./OAuth"), exports);
+__exportStar(require("./UserForm"), exports);
 
-},{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./HomeSection":8,"./Languages":9,"./Manga":10,"./MangaTile":11,"./MangaUpdate":12,"./PagedResults":13,"./RequestHeaders":14,"./RequestManager":15,"./RequestObject":16,"./ResponseObject":17,"./SearchRequest":18,"./SourceInfo":19,"./SourceTag":20,"./TagSection":21}],23:[function(require,module,exports){
+},{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./HomeSection":8,"./Languages":9,"./Manga":10,"./MangaTile":11,"./MangaUpdate":12,"./OAuth":13,"./PagedResults":14,"./RequestHeaders":15,"./RequestManager":16,"./RequestObject":17,"./ResponseObject":18,"./SearchRequest":19,"./SourceInfo":20,"./SourceTag":21,"./TagSection":22,"./TrackObject":23,"./UserForm":24}],26:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -302,19 +335,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MangaLife = exports.MangaLifeInfo = void 0;
+exports.MangaLife = exports.MangaLifeInfo = exports.ML_DOMAIN = void 0;
 const paperback_extensions_common_1 = require("paperback-extensions-common");
-const ML_DOMAIN = 'https://manga4life.com';
-let ML_IMAGE_DOMAIN = 'https://cover.mangabeast01.com/cover';
+const MangaLifeParsing_1 = require("./MangaLifeParsing");
+exports.ML_DOMAIN = 'https://manga4life.com';
+const headers = { "content-type": "application/x-www-form-urlencoded" };
+const method = 'GET';
 exports.MangaLifeInfo = {
-    version: '1.1.4',
+    version: '2.1.0',
     name: 'Manga4Life',
     icon: 'icon.png',
     author: 'Daniel Kovalevich',
     authorWebsite: 'https://github.com/DanielKovalevich',
     description: 'Extension that pulls manga from MangaLife, includes Advanced Search and Updated manga fetching',
     hentaiSource: false,
-    websiteBaseURL: ML_DOMAIN,
+    websiteBaseURL: exports.ML_DOMAIN,
     sourceTags: [
         {
             text: "Notifications",
@@ -323,452 +358,389 @@ exports.MangaLifeInfo = {
     ]
 };
 class MangaLife extends paperback_extensions_common_1.Source {
-    getMangaShareUrl(mangaId) { return `${ML_DOMAIN}/manga/${mangaId}`; }
+    getMangaShareUrl(mangaId) { return `${exports.ML_DOMAIN}/manga/${mangaId}`; }
     getMangaDetails(mangaId) {
-        var _a, _b, _c, _d, _e, _f, _g, _h;
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${ML_DOMAIN}/manga/`,
-                method: 'GET',
+                url: `${exports.ML_DOMAIN}/manga/`,
+                method,
                 param: mangaId
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            let $ = this.cheerio.load(data.data);
-            let json = (_b = (_a = $('[type=application\\/ld\\+json]').html()) === null || _a === void 0 ? void 0 : _a.replace(/\t*\n*/g, '')) !== null && _b !== void 0 ? _b : '';
-            // this is only because they added some really jank alternate titles and didn't propely string escape
-            let jsonWithoutAlternateName = json.replace(/"alternateName".*?],/g, '');
-            let alternateNames = ((_c = /"alternateName": \[(.*?)\]/.exec(json)) !== null && _c !== void 0 ? _c : [])[1]
-                .replace(/\"/g, '')
-                .split(',');
-            let parsedJson = JSON.parse(jsonWithoutAlternateName);
-            let entity = parsedJson.mainEntity;
-            let info = $('.row');
-            let imgSource = ((_e = (_d = $('.ImgHolder').html()) === null || _d === void 0 ? void 0 : _d.match(/src="(.*)\//)) !== null && _e !== void 0 ? _e : [])[1];
-            if (imgSource !== ML_IMAGE_DOMAIN)
-                ML_IMAGE_DOMAIN = imgSource;
-            let image = `${ML_IMAGE_DOMAIN}/${mangaId}.jpg`;
-            let title = (_f = $('h1', info).first().text()) !== null && _f !== void 0 ? _f : '';
-            let titles = [title];
-            let author = entity.author[0];
-            titles = titles.concat(alternateNames);
-            let follows = Number(((_h = (_g = $.root().html()) === null || _g === void 0 ? void 0 : _g.match(/vm.NumSubs = (.*);/)) !== null && _h !== void 0 ? _h : [])[1]);
-            let tagSections = [createTagSection({ id: '0', label: 'genres', tags: [] }),
-                createTagSection({ id: '1', label: 'format', tags: [] })];
-            tagSections[0].tags = entity.genre.map((elem) => createTag({ id: elem, label: elem }));
-            let update = entity.dateModified;
-            let status = paperback_extensions_common_1.MangaStatus.ONGOING;
-            let summary = '';
-            let hentai = entity.genre.includes('Hentai') || entity.genre.includes('Adult');
-            let details = $('.list-group', info);
-            for (let row of $('li', details).toArray()) {
-                let text = $('.mlabel', row).text();
-                switch (text) {
-                    case 'Type:': {
-                        let type = $('a', row).text();
-                        tagSections[1].tags.push(createTag({ id: type.trim(), label: type.trim() }));
-                        break;
-                    }
-                    case 'Status:': {
-                        status = $(row).text().includes('Ongoing') ? paperback_extensions_common_1.MangaStatus.ONGOING : paperback_extensions_common_1.MangaStatus.COMPLETED;
-                        break;
-                    }
-                    case 'Description:': {
-                        summary = $('div', row).text().trim();
-                        break;
-                    }
-                }
-            }
-            return createManga({
-                id: mangaId,
-                titles: titles,
-                image: image,
-                rating: 0,
-                status: status,
-                author: author,
-                tags: tagSections,
-                desc: summary,
-                hentai: hentai,
-                follows: follows,
-                lastUpdate: update
-            });
+            const response = yield this.requestManager.schedule(request, 1);
+            let $ = this.cheerio.load(response.data);
+            return MangaLifeParsing_1.parseMangaDetails($, mangaId);
         });
     }
     getChapters(mangaId) {
-        var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${ML_DOMAIN}/manga/`,
-                method: "GET",
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded"
-                },
+                url: `${exports.ML_DOMAIN}/manga/`,
+                method,
+                headers,
                 param: mangaId
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            const $ = this.cheerio.load(data.data);
-            let chapterJS = JSON.parse(((_b = (_a = $.root().html()) === null || _a === void 0 ? void 0 : _a.match(/vm.Chapters = (.*);/)) !== null && _b !== void 0 ? _b : [])[1]).reverse();
-            let chapters = [];
-            // following the url encoding that the website uses, same variables too
-            chapterJS.forEach((elem) => {
-                let chapterCode = elem.Chapter;
-                let vol = Number(chapterCode.substring(0, 1));
-                let index = vol != 1 ? '-index-' + vol : '';
-                let n = parseInt(chapterCode.slice(1, -1));
-                let a = Number(chapterCode[chapterCode.length - 1]);
-                let m = a != 0 ? '.' + a : '';
-                let id = mangaId + '-chapter-' + n + m + index + '.html';
-                let chNum = n + a * .1;
-                let name = elem.ChapterName ? elem.ChapterName : ''; // can be null
-                let timeStr = elem.Date.replace(/-/g, "/");
-                let time = new Date(timeStr);
-                chapters.push(createChapter({
-                    id: id,
-                    mangaId: mangaId,
-                    name: name,
-                    chapNum: chNum,
-                    volume: vol,
-                    langCode: paperback_extensions_common_1.LanguageCode.ENGLISH,
-                    time: time
-                }));
-            });
-            return chapters;
+            const response = yield this.requestManager.schedule(request, 1);
+            const $ = this.cheerio.load(response.data);
+            return MangaLifeParsing_1.parseChapters($, mangaId);
         });
     }
     getChapterDetails(mangaId, chapterId) {
-        var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${ML_DOMAIN}/read-online/`,
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded"
-                },
-                method: 'GET',
+                url: `${exports.ML_DOMAIN}/read-online/`,
+                headers,
+                method,
                 param: chapterId
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            let pages = [];
-            let pathName = JSON.parse(((_a = data.data.match(/vm.CurPathName = (.*);/)) !== null && _a !== void 0 ? _a : [])[1]);
-            let chapterInfo = JSON.parse(((_b = data.data.match(/vm.CurChapter = (.*);/)) !== null && _b !== void 0 ? _b : [])[1]);
-            let pageNum = Number(chapterInfo.Page);
-            let chapter = chapterInfo.Chapter.slice(1, -1);
-            let odd = chapterInfo.Chapter[chapterInfo.Chapter.length - 1];
-            let chapterImage = odd == 0 ? chapter : chapter + '.' + odd;
-            for (let i = 0; i < pageNum; i++) {
-                let s = '000' + (i + 1);
-                let page = s.substr(s.length - 3);
-                pages.push(`https://${pathName}/manga/${mangaId}/${chapterInfo.Directory == '' ? '' : chapterInfo.Directory + '/'}${chapterImage}-${page}.png`);
-            }
-            let chapterDetails = createChapterDetails({
-                id: chapterId,
-                mangaId: mangaId,
-                pages, longStrip: false
-            });
-            return chapterDetails;
+            const response = yield this.requestManager.schedule(request, 1);
+            return MangaLifeParsing_1.parseChapterDetails(response.data, mangaId, chapterId);
         });
     }
     filterUpdatedManga(mangaUpdatesFoundCallback, time, ids) {
-        var _a;
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${ML_DOMAIN}/`,
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded"
-                },
-                method: "GET"
+                url: `${exports.ML_DOMAIN}/`,
+                headers,
+                method,
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            const returnObject = {
-                'ids': []
-            };
-            const updateManga = JSON.parse(((_a = data.data.match(/vm.LatestJSON = (.*);/)) !== null && _a !== void 0 ? _a : [])[1]);
-            updateManga.forEach((elem) => {
-                if (ids.includes(elem.IndexName) && time < new Date(elem.Date))
-                    returnObject.ids.push(elem.IndexName);
-            });
+            const response = yield this.requestManager.schedule(request, 1);
+            const returnObject = MangaLifeParsing_1.parseUpdatedManga(response, time, ids);
             mangaUpdatesFoundCallback(createMangaUpdates(returnObject));
         });
     }
     searchRequest(query, _metadata) {
-        var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function* () {
-            let status = "";
-            switch (query.status) {
-                case 0:
-                    status = 'Completed';
-                    break;
-                case 1:
-                    status = 'Ongoing';
-                    break;
-                default: status = '';
-            }
-            let genre = query.includeGenre ?
-                (query.includeDemographic ? query.includeGenre.concat(query.includeDemographic) : query.includeGenre) :
-                query.includeDemographic;
-            let genreNo = query.excludeGenre ?
-                (query.excludeDemographic ? query.excludeGenre.concat(query.excludeDemographic) : query.excludeGenre) :
-                query.excludeDemographic;
-            let metadata = {
-                'keyword': query.title,
-                'author': query.author || query.artist || '',
-                'status': status,
-                'type': query.includeFormat,
-                'genre': genre,
-                'genreNo': genreNo
-            };
+            const metadata = MangaLifeParsing_1.searchMetadata(query);
             const request = createRequestObject({
-                url: `${ML_DOMAIN}/search/`,
-                metadata: metadata,
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded"
-                },
-                method: "GET"
+                url: `${exports.ML_DOMAIN}/directory/`,
+                metadata,
+                headers,
+                method,
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            const $ = this.cheerio.load(data.data);
-            let mangaTiles = [];
-            let directory = JSON.parse(((_a = data.data.match(/vm.Directory = (.*);/)) !== null && _a !== void 0 ? _a : [])[1]);
-            let imgSource = ((_c = (_b = $('.img-fluid').first().attr('src')) === null || _b === void 0 ? void 0 : _b.match(/(.*cover)/)) !== null && _c !== void 0 ? _c : [])[1];
-            if (imgSource !== ML_IMAGE_DOMAIN)
-                ML_IMAGE_DOMAIN = imgSource;
-            directory.forEach((elem) => {
-                let mKeyword = typeof metadata.keyword !== 'undefined' ? false : true;
-                let mAuthor = metadata.author !== '' ? false : true;
-                let mStatus = metadata.status !== '' ? false : true;
-                let mType = typeof metadata.type !== 'undefined' && metadata.type.length > 0 ? false : true;
-                let mGenre = typeof metadata.genre !== 'undefined' && metadata.genre.length > 0 ? false : true;
-                let mGenreNo = typeof metadata.genreNo !== 'undefined' ? true : false;
-                if (!mKeyword) {
-                    let allWords = [elem.s.toLowerCase()].concat(elem.al.map((e) => e.toLowerCase()));
-                    allWords.forEach((key) => {
-                        if (key.includes(metadata.keyword.toLowerCase()))
-                            mKeyword = true;
-                    });
-                }
-                if (!mAuthor) {
-                    let authors = elem.a.map((e) => e.toLowerCase());
-                    if (authors.includes(metadata.author.toLowerCase()))
-                        mAuthor = true;
-                }
-                if (!mStatus) {
-                    if ((elem.ss == 'Ongoing' && metadata.status == 'Ongoing') || (elem.ss != 'Ongoing' && metadata.ss != 'Ongoing'))
-                        mStatus = true;
-                }
-                if (!mType)
-                    mType = metadata.type.includes(elem.t);
-                if (!mGenre)
-                    mGenre = metadata.genre.every((i) => elem.g.includes(i));
-                if (mGenreNo)
-                    mGenreNo = metadata.genreNo.every((i) => elem.g.includes(i));
-                if (mKeyword && mAuthor && mStatus && mType && mGenre && !mGenreNo) {
-                    mangaTiles.push(createMangaTile({
-                        id: elem.i,
-                        title: createIconText({ text: elem.s }),
-                        image: `${ML_IMAGE_DOMAIN}/${elem.i}.jpg`,
-                        subtitleText: createIconText({ text: elem.ss })
-                    }));
-                }
-            });
-            // This source parses JSON and never requires additional pages
-            return createPagedResults({
-                results: mangaTiles
-            });
+            const response = yield this.requestManager.schedule(request, 1);
+            return MangaLifeParsing_1.parseSearch(response.data, metadata);
         });
     }
     getTags() {
-        var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${ML_DOMAIN}/search/`,
-                method: 'GET',
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded",
-                }
+                url: `${exports.ML_DOMAIN}/search/`,
+                method,
+                headers,
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            let tagSections = [createTagSection({ id: '0', label: 'genres', tags: [] }),
-                createTagSection({ id: '1', label: 'format', tags: [] })];
-            let genres = JSON.parse(((_a = data.data.match(/"Genre"\s*: (.*)/)) !== null && _a !== void 0 ? _a : [])[1].replace(/'/g, "\""));
-            let typesHTML = ((_b = data.data.match(/"Type"\s*: (.*),/g)) !== null && _b !== void 0 ? _b : [])[1];
-            let types = JSON.parse(((_c = typesHTML.match(/(\[.*\])/)) !== null && _c !== void 0 ? _c : [])[1].replace(/'/g, "\""));
-            tagSections[0].tags = genres.map((e) => createTag({ id: e, label: e }));
-            tagSections[1].tags = types.map((e) => createTag({ id: e, label: e }));
-            return tagSections;
+            const response = yield this.requestManager.schedule(request, 1);
+            return MangaLifeParsing_1.parseTags(response.data);
         });
     }
     getHomePageSections(sectionCallback) {
-        var _a, _b, _c, _d, _e, _f;
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${ML_DOMAIN}`,
-                method: 'GET'
+                url: `${exports.ML_DOMAIN}`,
+                method,
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            const hotSection = createHomeSection({ id: 'hot_update', title: 'HOT UPDATES', view_more: true });
-            const latestSection = createHomeSection({ id: 'latest', title: 'LATEST UPDATES', view_more: true });
-            const newTitlesSection = createHomeSection({ id: 'new_titles', title: 'NEW TITLES', view_more: true });
-            const recommendedSection = createHomeSection({ id: 'recommended', title: 'RECOMMENDATIONS', view_more: true });
-            sectionCallback(hotSection);
-            sectionCallback(latestSection);
-            sectionCallback(newTitlesSection);
-            sectionCallback(recommendedSection);
-            const $ = this.cheerio.load(data.data);
-            const hot = (JSON.parse(((_a = data.data.match(/vm.HotUpdateJSON = (.*);/)) !== null && _a !== void 0 ? _a : [])[1])).slice(0, 15);
-            const latest = (JSON.parse(((_b = data.data.match(/vm.LatestJSON = (.*);/)) !== null && _b !== void 0 ? _b : [])[1])).slice(0, 15);
-            const newTitles = (JSON.parse(((_c = data.data.match(/vm.NewSeriesJSON = (.*);/)) !== null && _c !== void 0 ? _c : [])[1])).slice(0, 15);
-            const recommended = JSON.parse(((_d = data.data.match(/vm.RecommendationJSON = (.*);/)) !== null && _d !== void 0 ? _d : [])[1]);
-            let imgSource = ((_f = (_e = $('.ImageHolder').html()) === null || _e === void 0 ? void 0 : _e.match(/ng-src="(.*)\//)) !== null && _f !== void 0 ? _f : [])[1];
-            if (imgSource !== ML_IMAGE_DOMAIN)
-                ML_IMAGE_DOMAIN = imgSource;
-            let hotManga = [];
-            hot.forEach((elem) => {
-                let id = elem.IndexName;
-                let title = elem.SeriesName;
-                let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                let time = (new Date(elem.Date)).toDateString();
-                time = time.slice(0, time.length - 5);
-                time = time.slice(4, time.length);
-                hotManga.push(createMangaTile({
-                    id: id,
-                    image: image,
-                    title: createIconText({ text: title }),
-                    secondaryText: createIconText({ text: time, icon: 'clock.fill' })
-                }));
-            });
-            hotSection.items = hotManga;
-            sectionCallback(hotSection);
-            let latestManga = [];
-            latest.forEach((elem) => {
-                let id = elem.IndexName;
-                let title = elem.SeriesName;
-                let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                let time = (new Date(elem.Date)).toDateString();
-                time = time.slice(0, time.length - 5);
-                time = time.slice(4, time.length);
-                latestManga.push(createMangaTile({
-                    id: id,
-                    image: image,
-                    title: createIconText({ text: title }),
-                    secondaryText: createIconText({ text: time, icon: 'clock.fill' })
-                }));
-            });
-            latestSection.items = latestManga;
-            sectionCallback(latestSection);
-            let newManga = [];
-            newTitles.forEach((elem) => {
-                let id = elem.IndexName;
-                let title = elem.SeriesName;
-                let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                newManga.push(createMangaTile({
-                    id: id,
-                    image: image,
-                    title: createIconText({ text: title })
-                }));
-            });
-            newTitlesSection.items = newManga;
-            sectionCallback(newTitlesSection);
-            let recManga = [];
-            recommended.forEach((elem) => {
-                let id = elem.IndexName;
-                let title = elem.SeriesName;
-                let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                let time = (new Date(elem.Date)).toDateString();
-                recManga.push(createMangaTile({
-                    id: id,
-                    image: image,
-                    title: createIconText({ text: title })
-                }));
-            });
-            recommendedSection.items = recManga;
-            sectionCallback(recommendedSection);
+            const response = yield this.requestManager.schedule(request, 1);
+            const $ = this.cheerio.load(response.data);
+            MangaLifeParsing_1.parseHomeSections($, response.data, sectionCallback);
         });
     }
-    getViewMoreItems(homepageSectionId, metadata) {
-        var _a, _b, _c, _d;
+    getViewMoreItems(homepageSectionId, _metadata) {
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: ML_DOMAIN,
-                method: 'GET'
+                url: exports.ML_DOMAIN,
+                method,
             });
-            const data = yield this.requestManager.schedule(request, 1);
-            //let manga: MangaTile[] = []
-            let manga = new Set();
-            if (homepageSectionId == 'hot_update') {
-                let hot = JSON.parse(((_a = data.data.match(/vm.HotUpdateJSON = (.*);/)) !== null && _a !== void 0 ? _a : [])[1]).slice(15);
-                hot.forEach((elem) => {
-                    let id = elem.IndexName;
-                    let title = elem.SeriesName;
-                    let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                    let time = (new Date(elem.Date)).toDateString();
-                    time = time.slice(0, time.length - 5);
-                    time = time.slice(4, time.length);
-                    manga.add(createMangaTile({
-                        id: id,
-                        image: image,
-                        title: createIconText({ text: title }),
-                        secondaryText: createIconText({ text: time, icon: 'clock.fill' })
-                    }));
-                });
-            }
-            else if (homepageSectionId == 'latest') {
-                let latest = JSON.parse(((_b = data.data.match(/vm.LatestJSON = (.*);/)) !== null && _b !== void 0 ? _b : [])[1]).slice(15);
-                latest.forEach((elem) => {
-                    let id = elem.IndexName;
-                    let title = elem.SeriesName;
-                    let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                    let time = (new Date(elem.Date)).toDateString();
-                    time = time.slice(0, time.length - 5);
-                    time = time.slice(4, time.length);
-                    manga.add(createMangaTile({
-                        id: id,
-                        image: image,
-                        title: createIconText({ text: title }),
-                        secondaryText: createIconText({ text: time, icon: 'clock.fill' })
-                    }));
-                });
-            }
-            else if (homepageSectionId == 'recommended') {
-                let latest = JSON.parse(((_c = data.data.match(/vm.RecommendationJSON = (.*);/)) !== null && _c !== void 0 ? _c : [])[1]);
-                latest.forEach((elem) => {
-                    let id = elem.IndexName;
-                    let title = elem.SeriesName;
-                    let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                    let time = (new Date(elem.Date)).toDateString();
-                    time = time.slice(0, time.length - 5);
-                    time = time.slice(4, time.length);
-                    manga.add(createMangaTile({
-                        id: id,
-                        image: image,
-                        title: createIconText({ text: title }),
-                        secondaryText: createIconText({ text: time, icon: 'clock.fill' })
-                    }));
-                });
-            }
-            else if (homepageSectionId == 'new_titles') {
-                let newTitles = JSON.parse(((_d = data.data.match(/vm.NewSeriesJSON = (.*);/)) !== null && _d !== void 0 ? _d : [])[1]).slice(15);
-                newTitles.forEach((elem) => {
-                    let id = elem.IndexName;
-                    let title = elem.SeriesName;
-                    let image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
-                    let time = (new Date(elem.Date)).toDateString();
-                    time = time.slice(0, time.length - 5);
-                    time = time.slice(4, time.length);
-                    manga.add(createMangaTile({
-                        id: id,
-                        image: image,
-                        title: createIconText({ text: title })
-                    }));
-                });
-            }
-            else
-                return null;
-            // This source parses JSON and never requires additional pages
-            return createPagedResults({
-                results: Array.from(manga)
-            });
+            const response = yield this.requestManager.schedule(request, 1);
+            return MangaLifeParsing_1.parseViewMore(response.data, homepageSectionId);
         });
     }
 }
 exports.MangaLife = MangaLife;
 
-},{"paperback-extensions-common":4}]},{},[23])(23)
+},{"./MangaLifeParsing":27,"paperback-extensions-common":4}],27:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseViewMore = exports.parseHomeSections = exports.parseTags = exports.parseSearch = exports.searchMetadata = exports.parseUpdatedManga = exports.parseChapterDetails = exports.parseChapters = exports.parseMangaDetails = exports.regex = void 0;
+const paperback_extensions_common_1 = require("paperback-extensions-common");
+let ML_IMAGE_DOMAIN = 'https://cover.mangabeast01.com/cover';
+exports.regex = {
+    'hot_update': /vm.HotUpdateJSON = (.*);/,
+    'latest': /vm.LatestJSON = (.*);/,
+    'recommended': /vm.RecommendationJSON = (.*);/,
+    'new_titles': /vm.NewSeriesJSON = (.*);/,
+    'chapters': /vm.Chapters = (.*);/,
+    'directory': /vm.FullDirectory = (.*);/,
+    'directory_image_host': /<img ng-src=\"(.*)\//
+};
+exports.parseMangaDetails = ($, mangaId) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    const json = (_b = (_a = $('[type=application\\/ld\\+json]').html()) === null || _a === void 0 ? void 0 : _a.replace(/\t*\n*/g, '')) !== null && _b !== void 0 ? _b : '';
+    // this is only because they added some really jank alternate titles and didn't propely string escape
+    const jsonWithoutAlternateName = json.replace(/"alternateName".*?],/g, '');
+    const alternateNames = (_c = /"alternateName": \[(.*?)\]/.exec(json)) === null || _c === void 0 ? void 0 : _c[1].replace(/\"/g, '').split(',');
+    const parsedJson = JSON.parse(jsonWithoutAlternateName);
+    const entity = parsedJson.mainEntity;
+    const info = $('.row');
+    const imgSource = (_f = (_e = (_d = $('.ImgHolder').html()) === null || _d === void 0 ? void 0 : _d.match(/src="(.*)\//)) === null || _e === void 0 ? void 0 : _e[1]) !== null && _f !== void 0 ? _f : ML_IMAGE_DOMAIN;
+    if (imgSource !== ML_IMAGE_DOMAIN)
+        ML_IMAGE_DOMAIN = imgSource;
+    const image = `${ML_IMAGE_DOMAIN}/${mangaId}.jpg`;
+    const title = (_g = $('h1', info).first().text()) !== null && _g !== void 0 ? _g : '';
+    let titles = [title];
+    const author = entity.author[0];
+    titles = titles.concat(alternateNames !== null && alternateNames !== void 0 ? alternateNames : '');
+    const follows = Number((_j = (_h = $.root().html()) === null || _h === void 0 ? void 0 : _h.match(/vm.NumSubs = (.*);/)) === null || _j === void 0 ? void 0 : _j[1]);
+    const tagSections = [createTagSection({ id: '0', label: 'genres', tags: [] }),
+        createTagSection({ id: '1', label: 'format', tags: [] })];
+    tagSections[0].tags = entity.genre.map((elem) => createTag({ id: elem, label: elem }));
+    const lastUpdate = entity.dateModified;
+    let status = paperback_extensions_common_1.MangaStatus.ONGOING;
+    let desc = '';
+    const hentai = entity.genre.includes('Hentai') || entity.genre.includes('Adult');
+    const details = $('.list-group', info);
+    for (const row of $('li', details).toArray()) {
+        const text = $('.mlabel', row).text();
+        switch (text) {
+            case 'Type:': {
+                const type = $('a', row).text();
+                tagSections[1].tags.push(createTag({ id: type.trim(), label: type.trim() }));
+                break;
+            }
+            case 'Status:': {
+                status = $(row).text().includes('Ongoing') ? paperback_extensions_common_1.MangaStatus.ONGOING : paperback_extensions_common_1.MangaStatus.COMPLETED;
+                break;
+            }
+            case 'Description:': {
+                desc = $('div', row).text().trim();
+                break;
+            }
+        }
+    }
+    return createManga({
+        id: mangaId,
+        titles,
+        image,
+        rating: 0,
+        status,
+        author,
+        tags: tagSections,
+        desc,
+        hentai,
+        follows,
+        lastUpdate
+    });
+};
+exports.parseChapters = ($, mangaId) => {
+    var _a, _b, _c;
+    const chapterJS = JSON.parse((_c = (_b = (_a = $.root().html()) === null || _a === void 0 ? void 0 : _a.match(exports.regex['chapters'])) === null || _b === void 0 ? void 0 : _b[1]) !== null && _c !== void 0 ? _c : '').reverse();
+    const chapters = [];
+    // following the url encoding that the website uses, same variables too
+    for (const elem of chapterJS) {
+        const chapterCode = elem.Chapter;
+        const volume = Number(chapterCode.substring(0, 1));
+        const index = volume != 1 ? '-index-' + volume : '';
+        const n = parseInt(chapterCode.slice(1, -1));
+        const a = Number(chapterCode[chapterCode.length - 1]);
+        const m = a != 0 ? '.' + a : '';
+        const id = mangaId + '-chapter-' + n + m + index + '.html';
+        const chapNum = n + a * .1;
+        const name = elem.ChapterName ? elem.ChapterName : ''; // can be null
+        const timeStr = elem.Date.replace(/-/g, "/");
+        const time = new Date(timeStr);
+        chapters.push(createChapter({
+            id,
+            mangaId,
+            name,
+            chapNum,
+            volume,
+            langCode: paperback_extensions_common_1.LanguageCode.ENGLISH,
+            time
+        }));
+    }
+    return chapters;
+};
+exports.parseChapterDetails = (data, mangaId, chapterId) => {
+    var _a, _b;
+    const pages = [];
+    const pathName = JSON.parse((_a = data.match(/vm.CurPathName = (.*);/)) === null || _a === void 0 ? void 0 : _a[1]);
+    const chapterInfo = JSON.parse((_b = data.match(/vm.CurChapter = (.*);/)) === null || _b === void 0 ? void 0 : _b[1]);
+    const pageNum = Number(chapterInfo.Page);
+    const chapter = chapterInfo.Chapter.slice(1, -1);
+    const odd = chapterInfo.Chapter[chapterInfo.Chapter.length - 1];
+    const chapterImage = odd == 0 ? chapter : chapter + '.' + odd;
+    for (let i = 0; i < pageNum; i++) {
+        const s = '000' + (i + 1);
+        const page = s.substr(s.length - 3);
+        pages.push(`https://${pathName}/manga/${mangaId}/${chapterInfo.Directory == '' ? '' : chapterInfo.Directory + '/'}${chapterImage}-${page}.png`);
+    }
+    return createChapterDetails({
+        id: chapterId,
+        mangaId: mangaId,
+        pages, longStrip: false
+    });
+};
+exports.parseUpdatedManga = ({ data }, time, ids) => {
+    var _a;
+    const returnObject = {
+        'ids': []
+    };
+    const updateManga = JSON.parse((_a = data.match(exports.regex['latest'])) === null || _a === void 0 ? void 0 : _a[1]);
+    for (const elem of updateManga) {
+        if (ids.includes(elem.IndexName) && time < new Date(elem.Date))
+            returnObject.ids.push(elem.IndexName);
+    }
+    return returnObject;
+};
+exports.searchMetadata = (query) => {
+    var _a, _b, _c, _d, _e;
+    let status = "";
+    switch (query.status) {
+        case 0:
+            status = 'Completed';
+            break;
+        case 1:
+            status = 'Ongoing';
+            break;
+        default: status = '';
+    }
+    const genre = query.includeGenre ?
+        (query.includeDemographic ? query.includeGenre.concat(query.includeDemographic) : query.includeGenre) :
+        query.includeDemographic;
+    const genreNo = query.excludeGenre ?
+        (query.excludeDemographic ? query.excludeGenre.concat(query.excludeDemographic) : query.excludeGenre) :
+        query.excludeDemographic;
+    return {
+        'keyword': (_a = query.title) === null || _a === void 0 ? void 0 : _a.toLowerCase(),
+        'author': ((_b = query.author) === null || _b === void 0 ? void 0 : _b.toLowerCase()) || ((_c = query.artist) === null || _c === void 0 ? void 0 : _c.toLowerCase()) || '',
+        'status': (_d = status === null || status === void 0 ? void 0 : status.toLowerCase()) !== null && _d !== void 0 ? _d : '',
+        'type': (_e = query.includeFormat) === null || _e === void 0 ? void 0 : _e.map((x) => { var _a; return (_a = x === null || x === void 0 ? void 0 : x.toLowerCase()) !== null && _a !== void 0 ? _a : ''; }),
+        'genre': genre === null || genre === void 0 ? void 0 : genre.map((x) => { var _a; return (_a = x === null || x === void 0 ? void 0 : x.toLowerCase()) !== null && _a !== void 0 ? _a : ''; }),
+        'genreNo': genreNo === null || genreNo === void 0 ? void 0 : genreNo.map((x) => { var _a; return (_a = x === null || x === void 0 ? void 0 : x.toLowerCase()) !== null && _a !== void 0 ? _a : ''; })
+    };
+};
+exports.parseSearch = (data, metadata) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    const mangaTiles = [];
+    const directory = JSON.parse((_b = (_a = data === null || data === void 0 ? void 0 : data.match(exports.regex['directory'])) === null || _a === void 0 ? void 0 : _a[1]) !== null && _b !== void 0 ? _b : '')['Directory'];
+    const imgSource = (_d = (_c = data === null || data === void 0 ? void 0 : data.match(exports.regex['directory_image_host'])) === null || _c === void 0 ? void 0 : _c[1]) !== null && _d !== void 0 ? _d : ML_IMAGE_DOMAIN;
+    if (imgSource !== ML_IMAGE_DOMAIN)
+        ML_IMAGE_DOMAIN = imgSource;
+    for (const elem of directory) {
+        let mKeyword = typeof metadata.keyword !== 'undefined' ? false : true;
+        let mAuthor = metadata.author !== '' ? false : true;
+        let mStatus = metadata.status !== '' ? false : true;
+        let mType = typeof metadata.type !== 'undefined' && metadata.type.length > 0 ? false : true;
+        let mGenre = typeof metadata.genre !== 'undefined' && metadata.genre.length > 0 ? false : true;
+        let mGenreNo = typeof metadata.genreNo !== 'undefined' ? true : false;
+        if (!mKeyword) {
+            const allWords = [...((_e = elem.al) !== null && _e !== void 0 ? _e : []), (_f = elem.s) !== null && _f !== void 0 ? _f : ''].join('||').toLowerCase();
+            mKeyword = allWords.includes(metadata.keyword);
+        }
+        if (!mAuthor) {
+            const authors = (_h = (_g = elem.a) === null || _g === void 0 ? void 0 : _g.join('||').toLowerCase()) !== null && _h !== void 0 ? _h : '';
+            if (authors.includes(metadata.author))
+                mAuthor = true;
+        }
+        if (!mStatus) {
+            if ((elem.st == 'ongoing' && metadata.status == 'ongoing') || (elem.st != 'ongoing' && metadata.ss != 'ongoing'))
+                mStatus = true;
+        }
+        const flatG = (_k = (_j = elem.g) === null || _j === void 0 ? void 0 : _j.join('||')) !== null && _k !== void 0 ? _k : '';
+        if (!mType)
+            mType = metadata.type.includes(elem.t);
+        if (!mGenre)
+            mGenre = metadata.genre.every((i) => flatG.includes(i));
+        if (mGenreNo)
+            mGenreNo = metadata.genreNo.every((i) => flatG.includes(i));
+        if (mKeyword && mAuthor && mStatus && mType && mGenre && !mGenreNo) {
+            mangaTiles.push(createMangaTile({
+                id: elem.i,
+                title: createIconText({ text: elem.s }),
+                image: `${ML_IMAGE_DOMAIN}/${elem.i}.jpg`,
+                subtitleText: createIconText({ text: elem.st })
+            }));
+        }
+    }
+    // This source parses JSON and never requires additional pages
+    return createPagedResults({
+        results: mangaTiles
+    });
+};
+exports.parseTags = (data) => {
+    var _a, _b, _c;
+    const tagSections = [createTagSection({ id: '0', label: 'genres', tags: [] }),
+        createTagSection({ id: '1', label: 'format', tags: [] })];
+    const genres = JSON.parse((_a = data.match(/"Genre"\s*: (.*)/)) === null || _a === void 0 ? void 0 : _a[1].replace(/'/g, "\""));
+    const typesHTML = (_b = data.match(/"Type"\s*: (.*),/g)) === null || _b === void 0 ? void 0 : _b[1];
+    const types = JSON.parse((_c = typesHTML.match(/(\[.*\])/)) === null || _c === void 0 ? void 0 : _c[1].replace(/'/g, "\""));
+    tagSections[0].tags = genres.map((e) => createTag({ id: e, label: e }));
+    tagSections[1].tags = types.map((e) => createTag({ id: e, label: e }));
+    return tagSections;
+};
+exports.parseHomeSections = ($, data, sectionCallback) => {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const hotSection = createHomeSection({ id: 'hot_update', title: 'HOT UPDATES', view_more: true });
+    const latestSection = createHomeSection({ id: 'latest', title: 'LATEST UPDATES', view_more: true });
+    const newTitlesSection = createHomeSection({ id: 'new_titles', title: 'NEW TITLES', view_more: true });
+    const recommendedSection = createHomeSection({ id: 'recommended', title: 'RECOMMENDATIONS', view_more: true });
+    const hot = JSON.parse(((_a = data.match(exports.regex[hotSection.id])) === null || _a === void 0 ? void 0 : _a[1])).slice(0, 15);
+    const latest = JSON.parse(((_b = data.match(exports.regex[latestSection.id])) === null || _b === void 0 ? void 0 : _b[1])).slice(0, 15);
+    const newTitles = JSON.parse((_c = (data.match(exports.regex[newTitlesSection.id]))) === null || _c === void 0 ? void 0 : _c[1]).slice(0, 15);
+    const recommended = JSON.parse(((_d = data.match(exports.regex[recommendedSection.id])) === null || _d === void 0 ? void 0 : _d[1]));
+    const sections = [hotSection, latestSection, newTitlesSection, recommendedSection];
+    const sectionData = [hot, latest, newTitles, recommended];
+    let imgSource = (_g = (_f = (_e = $('.ImageHolder').html()) === null || _e === void 0 ? void 0 : _e.match(/ng-src="(.*)\//)) === null || _f === void 0 ? void 0 : _f[1]) !== null && _g !== void 0 ? _g : ML_IMAGE_DOMAIN;
+    if (imgSource !== ML_IMAGE_DOMAIN)
+        ML_IMAGE_DOMAIN = imgSource;
+    for (const [i, section] of sections.entries()) {
+        sectionCallback(section);
+        const manga = [];
+        for (const elem of sectionData[i]) {
+            const id = elem.IndexName;
+            const title = elem.SeriesName;
+            const image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
+            let time = (new Date(elem.Date)).toDateString();
+            time = time.slice(0, time.length - 5);
+            time = time.slice(4, time.length);
+            manga.push(createMangaTile({
+                id,
+                image,
+                title: createIconText({ text: title }),
+                secondaryText: createIconText({ text: time, icon: 'clock.fill' })
+            }));
+        }
+        section.items = manga;
+        sectionCallback(section);
+    }
+};
+exports.parseViewMore = (data, homepageSectionId) => {
+    var _a;
+    const manga = [];
+    const mangaIds = new Set();
+    if (!exports.regex[homepageSectionId])
+        return null;
+    const items = JSON.parse((_a = (data.match(exports.regex[homepageSectionId]))) === null || _a === void 0 ? void 0 : _a[1]);
+    for (const item of items) {
+        const id = item.IndexName;
+        if (!mangaIds.has(id)) {
+            const title = item.SeriesName;
+            const image = `${ML_IMAGE_DOMAIN}/${id}.jpg`;
+            let time = (new Date(item.Date)).toDateString();
+            time = time.slice(0, time.length - 5);
+            time = time.slice(4, time.length);
+            manga.push(createMangaTile({
+                id,
+                image,
+                title: createIconText({ text: title }),
+                secondaryText: homepageSectionId !== 'new_titles' ? createIconText({ text: time, icon: 'clock.fill' }) : undefined
+            }));
+            mangaIds.add(id);
+        }
+    }
+    // This source parses JSON and never requires additional pages
+    return createPagedResults({
+        results: manga
+    });
+};
+
+},{"paperback-extensions-common":4}]},{},[26])(26)
 });

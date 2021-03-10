@@ -34,6 +34,18 @@ class Source {
     globalRequestHeaders() { return {}; }
     globalRequestCookies() { return []; }
     /**
+     * A stateful source may require user input.
+     * By supplying this value to the Source, the app will render your form to the user
+     * in the application settings.
+     */
+    getAppStatefulForm() { return createUserForm({ formElements: [] }); }
+    /**
+     * When the Advanced Search is rendered to the user, this skeleton defines what
+     * fields which will show up to the user, and returned back to the source
+     * when the request is made.
+     */
+    getAdvancedSearchForm() { return createUserForm({ formElements: [] }); }
+    /**
      * (OPTIONAL METHOD) Given a manga ID, return a URL which Safari can open in a browser to display.
      * @param mangaId
      */
@@ -118,6 +130,18 @@ class Source {
         }
         return time;
     }
+    /**
+     * When a function requires a POST body, it always should be defined as a JsonObject
+     * and then passed through this function to ensure that it's encoded properly.
+     * @param obj
+     */
+    urlEncodeObject(obj) {
+        let ret = {};
+        for (const entry of Object.entries(obj)) {
+            ret[encodeURIComponent(entry[0])] = encodeURIComponent(entry[1]);
+        }
+        return ret;
+    }
 }
 exports.Source = Source;
 
@@ -153,7 +177,7 @@ __exportStar(require("./base"), exports);
 __exportStar(require("./models"), exports);
 __exportStar(require("./APIWrapper"), exports);
 
-},{"./APIWrapper":1,"./base":3,"./models":22}],5:[function(require,module,exports){
+},{"./APIWrapper":1,"./base":3,"./models":25}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 
@@ -240,6 +264,8 @@ arguments[4][5][0].apply(exports,arguments)
 },{"dup":5}],19:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
 },{"dup":5}],20:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TagType = void 0;
@@ -257,9 +283,13 @@ var TagType;
     TagType["RED"] = "danger";
 })(TagType = exports.TagType || (exports.TagType = {}));
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
-},{"dup":5}],22:[function(require,module,exports){
+},{"dup":5}],23:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],24:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],25:[function(require,module,exports){
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -289,8 +319,11 @@ __exportStar(require("./ResponseObject"), exports);
 __exportStar(require("./RequestManager"), exports);
 __exportStar(require("./RequestHeaders"), exports);
 __exportStar(require("./SourceInfo"), exports);
+__exportStar(require("./TrackObject"), exports);
+__exportStar(require("./OAuth"), exports);
+__exportStar(require("./UserForm"), exports);
 
-},{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./HomeSection":8,"./Languages":9,"./Manga":10,"./MangaTile":11,"./MangaUpdate":12,"./PagedResults":13,"./RequestHeaders":14,"./RequestManager":15,"./RequestObject":16,"./ResponseObject":17,"./SearchRequest":18,"./SourceInfo":19,"./SourceTag":20,"./TagSection":21}],23:[function(require,module,exports){
+},{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./HomeSection":8,"./Languages":9,"./Manga":10,"./MangaTile":11,"./MangaUpdate":12,"./OAuth":13,"./PagedResults":14,"./RequestHeaders":15,"./RequestManager":16,"./RequestObject":17,"./ResponseObject":18,"./SearchRequest":19,"./SourceInfo":20,"./SourceTag":21,"./TagSection":22,"./TrackObject":23,"./UserForm":24}],26:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -319,17 +352,18 @@ catch (_a) {
 // to the beta/alpha version of the app
 const PAPERBACK_API = `https://${IS_BETA ? 'md-cacher.herokuapp.com' : 'api.paperback.moe'}`;
 const MANGADEX_DOMAIN = 'https://mangadex.org';
-const MANGADEX_API = MANGADEX_DOMAIN + '/api';
+const MANGADEX_API_V2 = 'https://api.mangadex.org/v2';
 const MANGA_ENDPOINT = PAPERBACK_API + '/manga';
-const CHAPTER_LIST_ENDPOINT = MANGADEX_API + '/manga';
-const CHAPTER_DETAILS_ENDPOINT = MANGADEX_API + '/chapter';
+const CHAPTER_LIST_ENDPOINT = MANGADEX_API_V2 + '/manga';
+const CHAPTER_DETAILS_ENDPOINT = MANGADEX_API_V2 + '/chapter';
 const SEARCH_ENDPOINT = PAPERBACK_API + '/search';
+const MANGA_RECENT = MANGADEX_DOMAIN + '/updates';
 exports.MangaDexInfo = {
     author: 'Neko',
     description: 'Overwrites SafeDex,unlocks all mangas MangaDex has to offer and loads slightly faster. supports notifications',
     icon: 'icon.png',
     name: 'MangaDex Unlocked',
-    version: '2.0.2',
+    version: '2.0.5',
     authorWebsite: 'https://github.com/Pogogo007/extensions-main-promises',
     websiteBaseURL: MANGADEX_DOMAIN,
     hentaiSource: false,
@@ -349,6 +383,9 @@ class MangaDex extends paperback_extensions_common_1.Source {
             requestsPerSecond: 2,
             requestTimeout: 10000,
         });
+    }
+    getMangaShareUrl(mangaId) {
+        return `${MANGADEX_DOMAIN}/manga/${mangaId}`;
     }
     getMangaDetails(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -384,6 +421,7 @@ class MangaDex extends paperback_extensions_common_1.Source {
                     },
                     data: JSON.stringify({
                         id: batchedIds.map(x => parseInt(x)),
+                        bypassFilter: true,
                     }),
                 });
                 // eslint-disable-next-line no-await-in-loop
@@ -400,7 +438,7 @@ class MangaDex extends paperback_extensions_common_1.Source {
     getChapters(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${CHAPTER_LIST_ENDPOINT}/${mangaId}`,
+                url: `${CHAPTER_LIST_ENDPOINT}/${mangaId}/chapters`,
                 method: 'GET',
             });
             const response = yield this.requestManager.schedule(request, 1);
@@ -411,13 +449,12 @@ class MangaDex extends paperback_extensions_common_1.Source {
     getChapterDetails(_mangaId, chapterId) {
         return __awaiter(this, void 0, void 0, function* () {
             const request = createRequestObject({
-                url: `${CHAPTER_DETAILS_ENDPOINT}/${chapterId}?mark_read=0`,
-                method: 'GET',
-                incognito: false,
+                url: `${CHAPTER_DETAILS_ENDPOINT}/${chapterId}`,
+                method: 'GET'
             });
             const response = yield this.requestManager.schedule(request, 1);
             const json = JSON.parse(response.data);
-            return this.parser.parseChapterDetails(json);
+            return this.parser.parseChapterDetails(json.data);
         });
     }
     searchRequest(query, metadata) {
@@ -441,6 +478,17 @@ class MangaDex extends paperback_extensions_common_1.Source {
     getHomePageSections(sectionCallback) {
         return __awaiter(this, void 0, void 0, function* () {
             const sections = [
+                {
+                    request: createRequestObject({
+                        url: MANGA_RECENT,
+                        method: 'GET',
+                    }),
+                    section: createHomeSection({
+                        id: 'recently_updated',
+                        title: 'RECENTLY UPDATED TITLES',
+                        view_more: true,
+                    }),
+                },
                 {
                     request: this.constructSearchRequest({
                         includeDemographic: ['1'],
@@ -468,14 +516,62 @@ class MangaDex extends paperback_extensions_common_1.Source {
                 sectionCallback(section.section);
                 // Get the section data
                 promises.push(this.requestManager.schedule(section.request, 1).then(response => {
-                    const json = JSON.parse(response.data);
-                    const tiles = this.parser.parseMangaTiles(json);
-                    section.section.items = tiles;
+                    var _a, _b, _c, _d, _e;
+                    if (section.section.id == 'recently_updated') {
+                        let $ = this.cheerio.load(response.data);
+                        let updates = [];
+                        let elem = $('tr', 'tbody').toArray();
+                        let i = 0;
+                        while (i < elem.length) {
+                            let hasImg = false;
+                            let idStr = (_a = $('a.manga_title', elem[i]).attr('href')) !== null && _a !== void 0 ? _a : '';
+                            let id = (_c = ((_b = idStr.match(/(\d+)(?=\/)/)) !== null && _b !== void 0 ? _b : '')[0]) !== null && _c !== void 0 ? _c : '';
+                            let title = (_d = $('a.manga_title', elem[i]).text()) !== null && _d !== void 0 ? _d : '';
+                            let image = (_e = (MANGADEX_DOMAIN + $('img', elem[i]).attr('src'))) !== null && _e !== void 0 ? _e : '';
+                            // in this case: badge will be number of updates
+                            // that the manga has received within last week
+                            let badge = 0;
+                            let pIcon = 'eye.fill';
+                            let sIcon = 'clock.fill';
+                            let subTitle = '';
+                            let pText = '';
+                            let sText = '';
+                            let first = true;
+                            i++;
+                            while (!hasImg && i < elem.length) {
+                                // for the manga tile, we only care about the first/latest entry
+                                if (first && !hasImg) {
+                                    subTitle = $('a', elem[i]).first().text();
+                                    pText = $('.text-center.text-info', elem[i]).text();
+                                    sText = $('time', elem[i]).text().replace('ago', '').trim();
+                                    first = false;
+                                }
+                                badge++;
+                                i++;
+                                hasImg = $(elem[i]).find('img').length > 0;
+                            }
+                            updates.push(createMangaTile({
+                                id,
+                                image,
+                                title: createIconText({ text: title }),
+                                subtitleText: createIconText({ text: subTitle }),
+                                primaryText: createIconText({ text: pText, icon: pIcon }),
+                                secondaryText: createIconText({ text: sText, icon: sIcon }),
+                                badge
+                            }));
+                        }
+                        section.section.items = updates;
+                    }
+                    else {
+                        const json = JSON.parse(response.data);
+                        const tiles = this.parser.parseMangaTiles(json);
+                        section.section.items = tiles;
+                    }
                     sectionCallback(section.section);
                 }));
+                // Make sure the function completes
+                yield Promise.all(promises);
             }
-            // Make sure the function completes
-            yield Promise.all(promises);
         });
     }
     filterUpdatedManga(mangaUpdatesFoundCallback, time, ids) {
@@ -545,7 +641,7 @@ class MangaDex extends paperback_extensions_common_1.Source {
 }
 exports.MangaDex = MangaDex;
 
-},{"./Parser":24,"paperback-extensions-common":4}],24:[function(require,module,exports){
+},{"./Parser":27,"paperback-extensions-common":4}],27:[function(require,module,exports){
 "use strict";
 /* eslint-disable camelcase, @typescript-eslint/explicit-module-boundary-types, radix, unicorn/filename-case */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -606,28 +702,28 @@ class Parser {
         return mangas;
     }
     parseChapterList(mangaId, json) {
-        const chapters = json.chapter;
-        return Object.keys(chapters).map(id => {
-            const chapter = chapters[id];
-            const volume = Number(chapter.volume);
-            return createChapter({
-                id: id,
-                chapNum: Number(chapter.chapter),
-                langCode: chapter.lang_code,
-                volume: Number.isNaN(volume) ? 0 : volume,
+        let chapters = [];
+        const groups = Object.assign({}, ...json.data.groups.map((x) => ({ [x.id]: x.name })));
+        for (const chapter of json.data.chapters) {
+            chapters.push(createChapter({
+                id: chapter.id.toString(),
                 mangaId: mangaId,
-                group: chapter.group_name,
+                chapNum: Number(chapter.chapter),
+                langCode: chapter.language,
+                volume: Number.isNaN(chapter.volume) ? 0 : chapter.volume,
+                group: chapter.groups.map((x) => groups[x]).join(', '),
                 name: chapter.title,
-                time: new Date(Number(chapter.timestamp) * 1000),
-            });
-        });
+                time: new Date(Number(chapter.timestamp) * 1000)
+            }));
+        }
+        return chapters;
     }
     parseChapterDetails(chapterDetails) {
         return createChapterDetails({
             id: chapterDetails.id.toString(),
-            longStrip: parseInt(chapterDetails.long_strip) === 1,
-            mangaId: chapterDetails.manga_id.toString(),
-            pages: chapterDetails.page_array.map((x) => `${chapterDetails.server}${chapterDetails.hash}/${x}`),
+            longStrip: false,
+            mangaId: chapterDetails.mangaId.toString(),
+            pages: chapterDetails.pages.map((x) => `${chapterDetails.server}${chapterDetails.hash}/${x}`),
         });
     }
     filterUpdatedManga($, referenceTime, allManga) {
@@ -712,5 +808,5 @@ class Parser {
 }
 exports.Parser = Parser;
 
-},{}]},{},[23])(23)
+},{}]},{},[26])(26)
 });

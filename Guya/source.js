@@ -34,6 +34,18 @@ class Source {
     globalRequestHeaders() { return {}; }
     globalRequestCookies() { return []; }
     /**
+     * A stateful source may require user input.
+     * By supplying this value to the Source, the app will render your form to the user
+     * in the application settings.
+     */
+    getAppStatefulForm() { return createUserForm({ formElements: [] }); }
+    /**
+     * When the Advanced Search is rendered to the user, this skeleton defines what
+     * fields which will show up to the user, and returned back to the source
+     * when the request is made.
+     */
+    getAdvancedSearchForm() { return createUserForm({ formElements: [] }); }
+    /**
      * (OPTIONAL METHOD) Given a manga ID, return a URL which Safari can open in a browser to display.
      * @param mangaId
      */
@@ -118,6 +130,18 @@ class Source {
         }
         return time;
     }
+    /**
+     * When a function requires a POST body, it always should be defined as a JsonObject
+     * and then passed through this function to ensure that it's encoded properly.
+     * @param obj
+     */
+    urlEncodeObject(obj) {
+        let ret = {};
+        for (const entry of Object.entries(obj)) {
+            ret[encodeURIComponent(entry[0])] = encodeURIComponent(entry[1]);
+        }
+        return ret;
+    }
 }
 exports.Source = Source;
 
@@ -153,7 +177,7 @@ __exportStar(require("./base"), exports);
 __exportStar(require("./models"), exports);
 __exportStar(require("./APIWrapper"), exports);
 
-},{"./APIWrapper":1,"./base":3,"./models":22}],5:[function(require,module,exports){
+},{"./APIWrapper":1,"./base":3,"./models":25}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 
@@ -240,6 +264,8 @@ arguments[4][5][0].apply(exports,arguments)
 },{"dup":5}],19:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
 },{"dup":5}],20:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TagType = void 0;
@@ -257,9 +283,13 @@ var TagType;
     TagType["RED"] = "danger";
 })(TagType = exports.TagType || (exports.TagType = {}));
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
-},{"dup":5}],22:[function(require,module,exports){
+},{"dup":5}],23:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],24:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],25:[function(require,module,exports){
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -289,8 +319,11 @@ __exportStar(require("./ResponseObject"), exports);
 __exportStar(require("./RequestManager"), exports);
 __exportStar(require("./RequestHeaders"), exports);
 __exportStar(require("./SourceInfo"), exports);
+__exportStar(require("./TrackObject"), exports);
+__exportStar(require("./OAuth"), exports);
+__exportStar(require("./UserForm"), exports);
 
-},{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./HomeSection":8,"./Languages":9,"./Manga":10,"./MangaTile":11,"./MangaUpdate":12,"./PagedResults":13,"./RequestHeaders":14,"./RequestManager":15,"./RequestObject":16,"./ResponseObject":17,"./SearchRequest":18,"./SourceInfo":19,"./SourceTag":20,"./TagSection":21}],23:[function(require,module,exports){
+},{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./HomeSection":8,"./Languages":9,"./Manga":10,"./MangaTile":11,"./MangaUpdate":12,"./OAuth":13,"./PagedResults":14,"./RequestHeaders":15,"./RequestManager":16,"./RequestObject":17,"./ResponseObject":18,"./SearchRequest":19,"./SourceInfo":20,"./SourceTag":21,"./TagSection":22,"./TrackObject":23,"./UserForm":24}],26:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -471,5 +504,5 @@ class Guya extends paperback_extensions_common_1.Source {
 }
 exports.Guya = Guya;
 
-},{"paperback-extensions-common":4}]},{},[23])(23)
+},{"paperback-extensions-common":4}]},{},[26])(26)
 });
