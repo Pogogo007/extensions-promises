@@ -12,21 +12,21 @@ import {
   TagType,
   RequestHeaders
 } from "paperback-extensions-common"
-import { parseChapterDetails, parseChapters, parseHomeSections, parseMangaDetails, parseSearch, parseTags, parseUpdatedManga, parseViewMore, searchMetadata } from "./MangaLifeParsing"
+import { parseChapterDetails, parseChapters, parseHomeSections, parseMangaDetails, parseSearch, parseTags, parseUpdatedManga, parseViewMore, searchMetadata } from "./MangaSeeParsing"
 
-export const ML_DOMAIN = 'https://manga4life.com'
+export const MS_DOMAIN = 'https://mangasee123.com'
 const headers = { "content-type": "application/x-www-form-urlencoded" }
 const method = 'GET'
 
-export const MangaLifeInfo: SourceInfo = {
-  version: '2.1.4',
-  name: 'Manga4Life',
-  icon: 'icon.png',
+export const MangaseeInfo: SourceInfo = {
+  version: '2.1.6',
+  name: 'Mangasee',
+  icon: 'Logo.png',
   author: 'Daniel Kovalevich',
   authorWebsite: 'https://github.com/DanielKovalevich',
-  description: 'Extension that pulls manga from MangaLife, includes Advanced Search and Updated manga fetching',
+  description: 'Extension that pulls manga from MangaSee, includes Advanced Search and Updated manga fetching',
   hentaiSource: false,
-  websiteBaseURL: ML_DOMAIN,
+  websiteBaseURL: MS_DOMAIN,
   sourceTags: [
     {
       text: "Notifications",
@@ -35,12 +35,12 @@ export const MangaLifeInfo: SourceInfo = {
   ]
 }
 
-export class MangaLife extends Source {
-  getMangaShareUrl(mangaId: string): string | null { return `${ML_DOMAIN}/manga/${mangaId}` }
+export class Mangasee extends Source {
+  getMangaShareUrl(mangaId: string): string | null { return `${MS_DOMAIN}/manga/${mangaId}` }
 
   async getMangaDetails(mangaId: string): Promise<Manga> {
     const request = createRequestObject({
-      url: `${ML_DOMAIN}/manga/`,
+      url: `${MS_DOMAIN}/manga/`,
       method,
       param: mangaId
     })
@@ -52,7 +52,7 @@ export class MangaLife extends Source {
 
   async getChapters(mangaId: string): Promise<Chapter[]> {
     const request = createRequestObject({
-      url: `${ML_DOMAIN}/manga/`,
+      url: `${MS_DOMAIN}/manga/`,
       method,
       headers,
       param: mangaId
@@ -65,7 +65,7 @@ export class MangaLife extends Source {
 
   async getChapterDetails(mangaId: string, chapterId: string): Promise<ChapterDetails> {
     const request = createRequestObject({
-      url: `${ML_DOMAIN}/read-online/`,
+      url: `${MS_DOMAIN}/read-online/`,
       headers,
       method,
       param: chapterId
@@ -77,7 +77,7 @@ export class MangaLife extends Source {
 
   async filterUpdatedManga(mangaUpdatesFoundCallback: (updates: MangaUpdates) => void, time: Date, ids: string[]): Promise<void> {
     const request = createRequestObject({
-      url: `${ML_DOMAIN}/`,
+      url: `${MS_DOMAIN}/`,
       headers,
       method,
     })
@@ -90,7 +90,7 @@ export class MangaLife extends Source {
   async searchRequest(query: SearchRequest, _metadata: any): Promise<PagedResults> {
     const metadata = searchMetadata(query);
     const request = createRequestObject({
-      url: `${ML_DOMAIN}/directory/`,
+      url: `${MS_DOMAIN}/directory/`,
       metadata,
       headers,
       method,
@@ -102,7 +102,7 @@ export class MangaLife extends Source {
 
   async getTags(): Promise<TagSection[] | null> {
     const request = createRequestObject({
-      url: `${ML_DOMAIN}/search/`,
+      url: `${MS_DOMAIN}/search/`,
       method,
       headers,
     })
@@ -113,7 +113,7 @@ export class MangaLife extends Source {
 
   async getHomePageSections(sectionCallback: (section: HomeSection) => void): Promise<void> {
     const request = createRequestObject({
-      url: `${ML_DOMAIN}`,
+      url: `${MS_DOMAIN}`,
       method,
     })
 
@@ -124,7 +124,7 @@ export class MangaLife extends Source {
 
   async getViewMoreItems(homepageSectionId: string, _metadata: any): Promise<PagedResults | null> {
     const request = createRequestObject({
-      url: ML_DOMAIN,
+      url: MS_DOMAIN,
       method,
     })
 
@@ -134,7 +134,7 @@ export class MangaLife extends Source {
 
   globalRequestHeaders(): RequestHeaders {
     return {
-      referer: ML_DOMAIN
+      referer: MS_DOMAIN
     }
   }
 }

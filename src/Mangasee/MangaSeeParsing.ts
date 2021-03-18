@@ -1,6 +1,6 @@
 import { Chapter, ChapterDetails, HomeSection, LanguageCode, Manga, MangaStatus, MangaTile, MangaUpdates, PagedResults, SearchRequest, TagSection } from "paperback-extensions-common"
 
-let ML_IMAGE_DOMAIN = 'https://cover.mangabeast01.com/cover'
+let MS_IMAGE_DOMAIN = 'https://cover.mangabeast01.com/cover'
 
 export type RegexIdMatch = {
     [id: string]: RegExp
@@ -26,10 +26,10 @@ export const parseMangaDetails = ($: CheerioStatic, mangaId: string): Manga => {
     const parsedJson = JSON.parse(jsonWithoutAlternateName)
     const entity = parsedJson.mainEntity
     const info = $('.row')
-    const imgSource = $('.ImgHolder').html()?.match(/src="(.*)\//)?.[1] ?? ML_IMAGE_DOMAIN
-    if (imgSource !== ML_IMAGE_DOMAIN)
-      ML_IMAGE_DOMAIN = imgSource
-    const image = `${ML_IMAGE_DOMAIN}/${mangaId}.jpg`
+    const imgSource = $('.ImgHolder').html()?.match(/src="(.*)\//)?.[1] ?? MS_IMAGE_DOMAIN
+    if (imgSource !== MS_IMAGE_DOMAIN)
+      MS_IMAGE_DOMAIN = imgSource
+    const image = `${MS_IMAGE_DOMAIN}/${mangaId}.jpg`
     const title = $('h1', info).first().text() ?? ''
     let titles = [title]
     const author = entity.author[0]
@@ -177,8 +177,8 @@ export const searchMetadata = (query: SearchRequest) => {
 export const parseSearch = (data: any, metadata: any): PagedResults => {
     const mangaTiles: MangaTile[] = []
     const directory: any[] = JSON.parse(data?.match(regex['directory'])?.[1] ?? '')['Directory']
-    const imgSource = data?.match(regex['directory_image_host'])?.[1] ?? ML_IMAGE_DOMAIN
-    if (imgSource !== ML_IMAGE_DOMAIN) ML_IMAGE_DOMAIN = imgSource
+    const imgSource = data?.match(regex['directory_image_host'])?.[1] ?? MS_IMAGE_DOMAIN
+    if (imgSource !== MS_IMAGE_DOMAIN) MS_IMAGE_DOMAIN = imgSource
 
     for (const elem of directory) {
         let mKeyword: boolean = typeof metadata.keyword !== 'undefined' ? false : true
@@ -210,7 +210,7 @@ export const parseSearch = (data: any, metadata: any): PagedResults => {
             mangaTiles.push(createMangaTile({
                 id: elem.i,
                 title: createIconText({ text: elem.s }),
-                image: `${ML_IMAGE_DOMAIN}/${elem.i}.jpg`,
+                image: `${MS_IMAGE_DOMAIN}/${elem.i}.jpg`,
                 subtitleText: createIconText({ text: elem.st })
             }))
         }
@@ -247,9 +247,9 @@ export const parseHomeSections = ($: CheerioStatic, data: any, sectionCallback: 
     const sections = [hotSection, latestSection, newTitlesSection, recommendedSection]
     const sectionData = [hot, latest, newTitles, recommended]
 
-    let imgSource = $('.ImageHolder').html()?.match(/ng-src="(.*)\//)?.[1] ?? ML_IMAGE_DOMAIN
-    if (imgSource !== ML_IMAGE_DOMAIN)
-        ML_IMAGE_DOMAIN = imgSource
+    let imgSource = $('.ImageHolder').html()?.match(/ng-src="(.*)\//)?.[1] ?? MS_IMAGE_DOMAIN
+    if (imgSource !== MS_IMAGE_DOMAIN)
+        MS_IMAGE_DOMAIN = imgSource
 
     for (const [i, section] of sections.entries()) {
         sectionCallback(section)
@@ -257,7 +257,7 @@ export const parseHomeSections = ($: CheerioStatic, data: any, sectionCallback: 
         for (const elem of sectionData[i]) {
             const id = elem.IndexName
             const title = elem.SeriesName
-            const image = `${ML_IMAGE_DOMAIN}/${id}.jpg`
+            const image = `${MS_IMAGE_DOMAIN}/${id}.jpg`
             let time = (new Date(elem.Date)).toDateString()
             time = time.slice(0, time.length - 5)
             time = time.slice(4, time.length)
@@ -283,7 +283,7 @@ export const parseViewMore = (data: any, homepageSectionId: string): PagedResult
         const id = item.IndexName
         if (!mangaIds.has(id)) {
             const title = item.SeriesName
-            const image = `${ML_IMAGE_DOMAIN}/${id}.jpg`
+            const image = `${MS_IMAGE_DOMAIN}/${id}.jpg`
             let time = (new Date(item.Date)).toDateString()
             time = time.slice(0, time.length - 5)
             time = time.slice(4, time.length)
