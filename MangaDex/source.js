@@ -362,7 +362,7 @@ exports.MangaDexInfo = {
     description: 'Overwrites SafeDex,unlocks all mangas MangaDex has to offer and loads slightly faster. supports notifications',
     icon: 'icon.png',
     name: 'MangaDex Unlocked',
-    version: '2.0.7',
+    version: '2.0.9',
     authorWebsite: 'https://github.com/Pogogo007/extensions-main-promises',
     websiteBaseURL: MANGADEX_DOMAIN,
     hentaiSource: false,
@@ -618,6 +618,7 @@ exports.MangaDex = MangaDex;
 /* eslint-disable camelcase, @typescript-eslint/explicit-module-boundary-types, radix, unicorn/filename-case */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Parser = void 0;
+const MANGAPLUS_GROUP_ID = 9097;
 class Parser {
     parseMangaDetails(json) {
         var _a;
@@ -677,16 +678,18 @@ class Parser {
         let chapters = [];
         const groups = Object.assign({}, ...json.data.groups.map((x) => ({ [x.id]: x.name })));
         for (const chapter of json.data.chapters) {
-            chapters.push(createChapter({
-                id: chapter.id.toString(),
-                mangaId: mangaId,
-                chapNum: Number(chapter.chapter),
-                langCode: chapter.language,
-                volume: Number.isNaN(chapter.volume) ? 0 : Number(chapter.volume),
-                group: chapter.groups.map((x) => groups[x]).join(', '),
-                name: chapter.title,
-                time: new Date(Number(chapter.timestamp) * 1000)
-            }));
+            if (!chapter.groups.includes(MANGAPLUS_GROUP_ID)) {
+                chapters.push(createChapter({
+                    id: chapter.id.toString(),
+                    mangaId: mangaId,
+                    chapNum: Number(chapter.chapter),
+                    langCode: chapter.language,
+                    volume: Number.isNaN(chapter.volume) ? 0 : Number(chapter.volume),
+                    group: chapter.groups.map((x) => groups[x]).join(', '),
+                    name: chapter.title,
+                    time: new Date(Number(chapter.timestamp) * 1000)
+                }));
+            }
         }
         return chapters;
     }
@@ -702,7 +705,8 @@ class Parser {
         var _a;
         console.log(`REFERENCE TIME: ${referenceTime}`);
         const ids = [];
-        for (const elem of $('.manga-entry').toArray()) {
+        const entries = $('.manga-entry').toArray();
+        for (const elem of entries) {
             const id = elem.attribs['data-id'];
             const mangaDate = new Date(((_a = $(elem).find('time').attr('datetime')) !== null && _a !== void 0 ? _a : '').replace(/-/g, '/'));
             console.log(`${id} updated at ${mangaDate}}`);
@@ -717,7 +721,7 @@ class Parser {
             }
         }
         console.log(`Found ${ids.length} updates`);
-        return { updates: ids, hasMore: true };
+        return { updates: ids, hasMore: entries.length > 0 };
     }
     parseMangaTiles(json) {
         var _a;
